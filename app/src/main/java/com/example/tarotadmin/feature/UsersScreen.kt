@@ -18,6 +18,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.example.tarotadmin.core.sync.AdminFtpManager
+import com.example.tarotadmin.core.sync.DeleteResult
 import com.example.tarotadmin.data.UserFolderItem
 import kotlinx.coroutines.launch
 
@@ -28,6 +29,7 @@ fun UsersScreen(onUserClick: (String) -> Unit) {
     var isLoading by remember { mutableStateOf(true) }
     var refreshTrigger by remember { mutableIntStateOf(0) }
     var userToDelete by remember { mutableStateOf<String?>(null) }
+    var message by remember { mutableStateOf<String?>(null) }
     val scope = rememberCoroutineScope()
 
     LaunchedEffect(refreshTrigger) {
@@ -53,13 +55,28 @@ fun UsersScreen(onUserClick: (String) -> Unit) {
                     if (folder != null) {
                         scope.launch {
                             isLoading = true
-                            AdminFtpManager.deleteUserFolder(folder)
-                            refreshTrigger++
+                            when (val result = AdminFtpManager.deleteUserFolder(folder)) {
+                                is DeleteResult.Success -> {
+                                    users = users.filterNot { it.folderName == folder }
+                                    message = "Устройство «$folder» удалено с сервера"
+                                }
+                                else -> message = "Не удалось удалить «$folder». ${result.describe()}"
+                            }
+                            isLoading = false
+                            refreshTrigger++ // синхронизируем список с сервером
                         }
                     }
                 }) { Text("Удалить", color = MaterialTheme.colorScheme.error) }
             },
             dismissButton = { TextButton(onClick = { userToDelete = null }) { Text("Отмена") } }
+        )
+    }
+
+    message?.let { text ->
+        AlertDialog(
+            onDismissRequest = { message = null },
+            confirmButton = { TextButton(onClick = { message = null }) { Text("ОК") } },
+            text = { Text(text) }
         )
     }
 
